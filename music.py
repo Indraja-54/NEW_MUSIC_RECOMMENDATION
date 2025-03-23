@@ -1,7 +1,10 @@
+import os
 import pickle
 import streamlit as st
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
+import pandas as pd
+import gdown
 
 # Spotify API Credentials
 CLIENT_ID = "70a9fb89662f4dac8d07321b259eaad7"
@@ -10,6 +13,14 @@ CLIENT_SECRET = "4d6710460d764fbbb8d8753dc094d131"
 # Initialize Spotify Client
 client_credentials_manager = SpotifyClientCredentials(client_id=CLIENT_ID, client_secret=CLIENT_SECRET)
 sp = spotipy.Spotify(client_credentials_manager=client_credentials_manager)
+
+# Function to load pickle from Google Drive or local file
+def load_or_download_pickle(url, output_filename):
+    if not os.path.exists(output_filename):
+        st.write(f"Downloading {output_filename} for the first time...")
+        gdown.download(url, output_filename, quiet=False, fuzzy=True)
+    with open(output_filename, "rb") as f:
+        return pickle.load(f)
 
 # Function to fetch album cover
 def get_song_album_cover_url(song_name, artist_name):
@@ -20,7 +31,7 @@ def get_song_album_cover_url(song_name, artist_name):
         track = results["tracks"]["items"][0]
         return track["album"]["images"][0]["url"]
     else:
-        return "https://i.postimg.cc/0QNxYz4V/social.png"  # Default image
+        return "https://i.postimg.cc/0QNxYz4V/social.png"
 
 # Recommendation function
 def recommend(song):
@@ -30,18 +41,23 @@ def recommend(song):
     recommended_music_names = []
     recommended_music_posters = []
 
-    for i in distances[1:21]:  # Get 20 recommendations
+    for i in distances[1:21]:
         artist = music.iloc[i[0]].artist
         recommended_music_posters.append(get_song_album_cover_url(music.iloc[i[0]].song, artist))
         recommended_music_names.append(music.iloc[i[0]].song)
 
     return recommended_music_names, recommended_music_posters
 
+# Google Drive URLs (converted)
+df_pkl_url = "https://drive.google.com/uc?export=download&id=108334Cg-i5knPIypAOb4u4zg6kmENQ6j"
+similarity_pkl_url = "https://drive.google.com/uc?export=download&id=1voUY0VlPtwfOmtds20D_D9oFRBspQdJ4"
+
+# Load pickles (only download if not available)
+music = load_or_download_pickle(df_pkl_url, "music.pkl")
+similarity = load_or_download_pickle(similarity_pkl_url, "similarity.pkl")
+
 # Streamlit UI
 st.markdown("<h1 style='text-align: center; color: white;'>🎵 Spotify Music Recommender 🎵</h1>", unsafe_allow_html=True)
-
-music = pickle.load(open('df.pkl', 'rb'))
-similarity = pickle.load(open('similarity.pkl', 'rb'))
 
 music_list = music['song'].values
 selected_song = st.selectbox("🔍 Select a song for recommendations", music_list)
@@ -49,13 +65,11 @@ selected_song = st.selectbox("🔍 Select a song for recommendations", music_lis
 if st.button("🎧 Get Recommendations"):
     recommended_music_names, recommended_music_posters = recommend(selected_song)
 
-    # Display Selected Song
     st.markdown(f"### 🎶 Now Playing: {selected_song}")
     st.image(get_song_album_cover_url(selected_song, music[music['song'] == selected_song].artist.values[0]), width=250)
 
     st.markdown("### 🎼 Recommended Songs")
 
-    # Apply custom CSS for animation
     st.markdown(
         """
         <style>
@@ -76,13 +90,12 @@ if st.button("🎧 Get Recommendations"):
         unsafe_allow_html=True,
     )
 
-    # Display recommendations in a **4-column grid**
     num_columns = 4
     rows = [recommended_music_names[i:i+num_columns] for i in range(0, len(recommended_music_names), num_columns)]
     poster_rows = [recommended_music_posters[i:i+num_columns] for i in range(0, len(recommended_music_posters), num_columns)]
 
     for row, poster_row in zip(rows, poster_rows):
-        cols = st.columns(num_columns)  # Create 4 columns per row
+        cols = st.columns(num_columns)
         for idx, col in enumerate(cols):
             if idx < len(row):
                 with col:
